@@ -1,7 +1,6 @@
 import pandas as pd
-import yfinance as yf  # Assuming you're fetching financial data with Yahoo Finance
-
-# Example function definitions
+import yfinance as yf
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 # Fetch data from Yahoo Finance
 def fetch_data(tickers, start_date, end_date):
@@ -24,16 +23,25 @@ def check_data_types(data):
         data_types[ticker] = df.dtypes
     return data_types
 
-# Clean data (example: removing NaN values)
+# Clean data function (removes rows with missing values)
 def clean_data(data):
     for ticker, df in data.items():
         data[ticker] = df.dropna()
     return data
 
-# Normalize data (example: normalizing closing prices)
+# Handle missing values
+def handle_missing_values(data):
+    for ticker, df in data.items():
+        df.interpolate(method='linear', inplace=True)
+        df.fillna(method='bfill', inplace=True)
+    return data
+
+# Normalize data (normalize all numeric columns)
 def normalize_data(data):
     for ticker, df in data.items():
-        df['Close'] = (df['Close'] - df['Close'].min()) / (df['Close'].max() - df['Close'].min())
+        for column in ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']:
+            if column in df.columns:
+                df[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
     return data
 
 # Calculate daily return
@@ -49,30 +57,79 @@ def rolling_statistics(data, window=30):
         df['Rolling Std'] = df['Close'].rolling(window).std()
     return data
 
-# Seasonal decomposition (using statsmodels or another method)
-def seasonal_decomposition(data, period=365):
-    from statsmodels.tsa.seasonal import seasonal_decompose
+# Seasonal decomposition with the additive model
+def seasonal_decomposition(data, period=365, model='additive'):
     decompositions = {}
     for ticker, df in data.items():
-        decompositions[ticker] = seasonal_decompose(df['Close'], period=period)
+        if 'Close' in df.columns and len(df['Close']) >= period:
+            decomposition = seasonal_decompose(df['Close'], period=period, model=model)
+            decompositions[ticker] = decomposition
+            decomposition.plot()
     return decompositions
 
-# Outlier detection (example: using 3 standard deviations from the mean)
+# Outlier detection
 def detect_outliers(data):
     outliers = {}
     for ticker, df in data.items():
-        mean = df['Close'].mean()
-        std = df['Close'].std()
-        outliers[ticker] = df[(df['Close'] > mean + 3*std) | (df['Close'] < mean - 3*std)]
+        mean = df['Daily Return'].mean()
+        std = df['Daily Return'].std()
+        high_outliers = df[df['Daily Return'] > mean + 3 * std]
+        low_outliers = df[df['Daily Return'] < mean - 3 * std]
+        outliers[ticker] = {'High Returns': high_outliers, 'Low Returns': low_outliers}
     return outliers
+
+# Log days with unusually high or low returns
+def log_unusual_returns(outliers):
+    for ticker, logs in outliers.items():
+        print(f"\nTicker: {ticker}")
+        print("High Return Days:")
+        print(logs['High Returns'][['Daily Return']])
+        print("Low Return Days:")
+        print(logs['Low Returns'][['Daily Return']])
 
 # Risk metrics: Sharpe Ratio and Value at Risk (VaR)
 def calculate_risk_metrics(data):
     risk_metrics = {}
     for ticker, df in data.items():
-        # Example: Calculate Sharpe Ratio and 95% Value at Risk
         daily_returns = df['Daily Return'].dropna()
-        sharpe_ratio = daily_returns.mean() / daily_returns.std() * (252**0.5)  # Assuming 252 trading days
+        sharpe_ratio = daily_returns.mean() / daily_returns.std() * (252**0.5)  # 252 trading days per year
         var_95 = daily_returns.quantile(0.05)
         risk_metrics[ticker] = {'Sharpe Ratio': sharpe_ratio, 'VaR (95%)': var_95}
     return risk_metrics
+
+# Main script to run all functions
+if __name__ == "__main__":
+    tickers = ['TSLA', 'BND', 'SPY']
+    start_date = '2020-01-01'
+    end_date = '2024-01-01'
+    
+    # Step 1: Fetch and prepare data
+    data = fetch_data(tickers, start_date, end_date)
+    data = clean_data(data)
+    data = handle_missing_values(data)
+    data = normalize_data(data)
+    
+    # Step 2: Data summary and data type check
+    summaries = data_summary(data)
+    data_types = check_data_types(data)
+    
+    # Step 3: Calculate daily returns and rolling statistics
+    data = calculate_daily_return(data)
+    data = rolling_statistics(data)
+    
+    # Step 4: Perform seasonal decomposition and detect outliers
+    decompositions = seasonal_decomposition(data)
+    outliers = detect_outliers(data)
+    log_unusual_returns(outliers)
+    
+    # Step 5: Calculate risk metrics
+    risk_metrics = calculate_risk_metrics(data)
+    
+    # Print results
+    print("\nData Summary:")
+    for ticker, summary in summaries.items():
+        print(f"\nSummary for {ticker}:\n", summary)
+    
+    print("\nRisk Metrics:")
+    for ticker, metrics in risk_metrics.items():
+        print(f"\nRisk Metrics for {ticker}:\n", metrics)
