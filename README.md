@@ -6,7 +6,7 @@ Guide Me in Finance (GMF) Investments uses time series forecasting models to opt
 ## Situational Overview 🧐 (Business Need)
 As a **Financial Analyst** at GMF Investments, your objective is to apply time series forecasting to historical financial data to enhance portfolio management strategies 💹. Your role involves analyzing data 📊, building predictive models 🤖, and recommending portfolio adjustments based on forecasted trends 📈.
 
-### You will:
+### Tasks are:
 - Utilize **YFinance** to extract historical financial information like stock prices 📉, market indices 📊, and other relevant financial metrics 💡.
 - Preprocess and analyze the data to identify trends 📈 and patterns 🔍.
 - Develop and evaluate forecasting models 📉 to predict future market movements 📊.
